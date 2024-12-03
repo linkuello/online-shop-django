@@ -1,60 +1,31 @@
+# Импортируем необходимые библиотеки
+import boto3
+from django.conf import settings
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from django.contrib.auth import authenticate, login, logout
-
+from django.contrib.auth import login, logout
 from .forms import UserRegistrationForm, UserLoginForm, ManagerLoginForm, EditProfileForm
 from accounts.models import User
 
+# Настройка клиента Cognito
+cognito_client = boto3.client('cognito-idp', region_name=settings.AWS_REGION)
 
-def create_manager():
-    """
-    to execute once on startup:
-    this function will call in online_shop/urls.py
-    """
-    if not User.objects.filter(email="manager@example.com").first():
-        user = User.objects.create_user(
-            "manager@example.com", 'shop manager' ,'managerpass1234'
+def authenticate_cognito_user(email, password):
+    """Функция для аутентификации через AWS Cognito"""
+    try:
+        response = cognito_client.initiate_auth(
+            ClientId=settings.AWS_COGNITO_APP_CLIENT_ID,
+            AuthFlow='USER_PASSWORD_AUTH',
+            AuthParameters={
+                'USERNAME': email,
+                'PASSWORD': password
+            }
         )
-        # give this user manager role
-        user.is_manager = True
-        user.save()
-
-
-def manager_login(request):
-    if request.method == 'POST':
-        form = ManagerLoginForm(request.POST)
-        if form.is_valid():
-            data = form.cleaned_data
-            user = authenticate(
-                request, email=data['email'], password=data['password']
-            )
-            if user is not None and user.is_manager:
-                login(request, user)
-                return redirect('dashboard:products')
-            else:
-                messages.error(
-                    request, 'username or password is wrong', 'danger'
-                )
-                return redirect('accounts:manager_login')
-    else:
-        form = ManagerLoginForm()
-    context = {'form': form}
-    return render(request, 'manager_login.html', context)
-
-
-def user_register(request):
-    if request.method == 'POST':
-        form = UserRegistrationForm(request.POST)
-        if form.is_valid():
-            data = form.cleaned_data
-            user = User.objects.create_user(
-                data['email'], data['full_name'], data['password']
-            )
-            return redirect('accounts:user_login')
-    else:
-        form = UserRegistrationForm()
-    context = {'title':'Signup', 'form':form}
-    return render(request, 'register.html', context)
+        return response['AuthenticationResult']
+    except cognito_client.exceptions.NotAuthorizedException:
+        return None
+    except Exception as e:
+        return None
 
 
 def user_login(request):
@@ -62,35 +33,48 @@ def user_login(request):
         form = UserLoginForm(request.POST)
         if form.is_valid():
             data = form.cleaned_data
-            user = authenticate(
-                request, email=data['email'], password=data['password']
-            )
-            if user is not None:
+            email = data['email']
+            password = data['password']
+
+            # Проверяем пользователя через Cognito
+            auth_response = authenticate_cognito_user(email, password)
+            if auth_response:
+                # Вход успешен, создаем или находим пользователя в базе
+                user, created = User.objects.get_or_create(email=email)
                 login(request, user)
                 return redirect('shop:home_page')
             else:
-                messages.error(
-                    request, 'username or password is wrong', 'danger'
-                )
+                messages.error(request, 'Invalid username or password', 'danger')
                 return redirect('accounts:user_login')
     else:
         form = UserLoginForm()
-    context = {'title':'Login', 'form': form}
+
+    context = {'title': 'Login', 'form': form}
     return render(request, 'login.html', context)
 
 
-def user_logout(request):
-    logout(request)
-    return redirect('accounts:user_login')
-
-
-def edit_profile(request):
-    form = EditProfileForm(request.POST, instance=request.user)
-    if form.is_valid():
-        form.save()
-        messages.success(request, 'Your profile has been updated', 'success')
-        return redirect('accounts:edit_profile')
+def user_register(request):
+    if request.method == 'POST':
+        form = UserRegistrationForm(request.POST)
+        if form.is_valid():
+            data = form.cleaned_data
+            # Регистрация через Cognito
+            try:
+                cognito_client.sign_up(
+                    ClientId=settings.AWS_COGNITO_APP_CLIENT_ID,
+                    Username=data['email'],
+                    Password=data['password'],
+                    UserAttributes=[
+                        {'Name': 'name', 'Value': data['full_name']},
+                        {'Name': 'email', 'Value': data['email']}
+                    ]
+                )
+                return redirect('accounts:user_login')
+            except cognito_client.exceptions.UsernameExistsException:
+                messages.error(request, 'User with this email already exists', 'danger')
+                return redirect('accounts:user_register')
     else:
-        form = EditProfileForm(instance=request.user)
-    context = {'title':'Edit Profile', 'form':form}
-    return render(request, 'edit_profile.html', context)
+        form = UserRegistrationForm()
+
+    context = {'title': 'Signup', 'form': form}
+    return render(request, 'register.html', context)

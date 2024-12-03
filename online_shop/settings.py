@@ -34,6 +34,11 @@ INSTALLED_APPS = [
     'dashboard.apps.DashboardConfig',
 ]
 
+AWS_COGNITO_USER_POOL_ID = 'your-cognito-user-pool-id'
+AWS_COGNITO_APP_CLIENT_ID = 'your-cognito-app-client-id'
+AWS_REGION = 'your-region'  # Например, 'us-east-2'
+
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',

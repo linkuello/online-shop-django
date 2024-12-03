@@ -3,15 +3,25 @@ from django.contrib.auth import views as auth_views
 
 from accounts import views
 
-
 app_name = 'accounts'
 
 urlpatterns = [
+    # Регистрация пользователя
     path('register/', views.user_register, name='user_register'),
+    
+    # Вход пользователя
     path('login/', views.user_login, name='user_login'),
+    
+    # Вход для менеджера (если требуется)
     path('login/manager/', views.manager_login, name='manager_login'),
+    
+    # Выход пользователя
     path('logout/', views.user_logout, name='user_logout'),
+    
+    # Редактирование профиля пользователя
     path('profile/edit', views.edit_profile, name='edit_profile'),
+    
+    # Сброс пароля
     path(
         'password-reset/',
         auth_views.PasswordResetView.as_view(
@@ -21,6 +31,8 @@ urlpatterns = [
         ),
         name='password_reset'
     ),
+    
+    # Подтверждение сброса пароля
     path(
         'password-reset/done',
         auth_views.PasswordResetDoneView.as_view(
@@ -28,6 +40,8 @@ urlpatterns = [
         ),
         name='password_reset_done'
     ),
+    
+    # Ссылка для изменения пароля (подтверждение через email)
     path(
         'password-reset-confirm/<uidb64>/<token>/',
         auth_views.PasswordResetConfirmView.as_view(
@@ -36,6 +50,8 @@ urlpatterns = [
         ),
         name='password_reset_confirm'
     ),
+    
+    # Страница успешного завершения сброса пароля
     path(
         'password-reset-complete/',
         auth_views.PasswordResetCompleteView.as_view(
@@ -44,4 +60,3 @@ urlpatterns = [
         name='password_reset_complete'
     ),
 ]
-
